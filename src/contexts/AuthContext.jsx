@@ -1,110 +1,97 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi } from '../services/authApi';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { authAPIService } from '../services/authApi';
 
 const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth는 AuthProvider 내에서 사용되어야 합니다.');
   }
   return context;
 };
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // 자동 로그인 상태 확인
-  const checkAuthStatus = async () => {
-    try {
-      setIsLoading(true);
-      const response = await authApi.getCurrentUser();
-      if (response.data.success) {
-        setUser(response.data.user);
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-    } catch (error) {
-      console.error('인증 상태 확인 실패:', error);
-      setUser(null);
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 로그인
-  const login = async (email, password) => {
-    try {
-      const response = await authApi.login(email, password);
-      if (response.data.success) {
-        setUser(response.data.user);
-        setIsAuthenticated(true);
-        return { success: true };
-      } else {
-        return { success: false, message: response.data.message };
-      }
-    } catch (error) {
-      return { success: false, message: '로그인 중 오류가 발생했습니다.' };
-    }
-  };
-
-  // 회원가입
-  const register = async (name, email, password) => {
-    try {
-      const response = await authApi.register(name, email, password);
-      if (response.data.success) {
-        setUser(response.data.user);
-        setIsAuthenticated(true);
-        return { success: true };
-      } else {
-        return { success: false, message: response.data.message };
-      }
-    } catch (error) {
-      return { success: false, message: '회원가입 중 오류가 발생했습니다.' };
-    }
-  };
-
-  // 로그아웃
-  const logout = async () => {
-    try {
-      await authApi.logout();
-    } catch (error) {
-      console.error('로그아웃 오류:', error);
-    } finally {
-      setUser(null);
-      setIsAuthenticated(false);
-    }
-  };
-
-  // 관리자 권한 확인
-  const isAdmin = () => {
-    return user && user.userType === 'admin';
-  };
-
-  // 컴포넌트 마운트 시 인증 상태 확인
+  // 앱 시작 시 현재 로그인 상태 확인
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
+  const checkAuthStatus = async () => {
+    try {
+      setLoading(true);
+      const response = await authAPIService.getCurrentUser();
+      if (response.data.success) {
+        setUser(response.data.data.user);
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.log('로그인 상태 확인 실패:', error);
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (credentials) => {
+    try {
+      const response = await authAPIService.login(credentials);
+      if (response.data.success) {
+        setUser(response.data.data.user);
+        setIsAuthenticated(true);
+        return { success: true, message: response.data.message };
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || '로그인에 실패했습니다.';
+      return { success: false, message };
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      const response = await authAPIService.register(userData);
+      if (response.data.success) {
+        setUser(response.data.data.user);
+        setIsAuthenticated(true);
+        return { success: true, message: response.data.message };
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || '회원가입에 실패했습니다.';
+      return { success: false, message };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authAPIService.logout();
+    } catch (error) {
+      console.log('로그아웃 요청 실패:', error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+    }
+  };
+
+  // 관리자 권한 확인 함수
+  const isAdmin = () => {
+    return user && user.userType === 'admin';
+  };
+
   const value = {
     user,
     isAuthenticated,
-    isLoading,
+    loading,
     login,
     register,
     logout,
+    checkAuthStatus,
     isAdmin,
-    checkAuthStatus
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
